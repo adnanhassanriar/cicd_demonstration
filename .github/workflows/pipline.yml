@@ -1,0 +1,81 @@
+name: CodeFusion CI/CD Demo
+
+on:
+  push:
+    branches:
+      - staging
+      - dev
+      - prod
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        branch: [staging, dev, prod]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup CodeFusion CLI
+        run: |
+          echo "Assume CodeFusion CLI is installed on Windows Server"
+          cfsutil --version
+
+      - name: Build CodeFusion Project
+        run: |
+          echo "Building project for branch ${{ github.ref_name }}"
+          cfsutil build --project MyProject.cfsproj --configuration Release
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware-${{ github.ref_name }}
+          path: build\Release\*
+  
+  deploy-staging:
+    needs: build
+    if: github.ref_name == 'staging'
+    runs-on: windows-latest
+    steps:
+      - name: Deploy to Staging
+        run: |
+          echo "Deploying firmware to Staging environment"
+          # simulate deployment
+          echo "Deployment complete "
+
+  deploy-dev:
+    needs: build
+    if: github.ref_name == 'dev'
+    runs-on: windows-latest
+    environment:
+      name: dev
+      url: https://dev-demo.example.com
+    steps:
+      - name: Await Manual Approval
+        uses: hmarr/auto-approve-action@v2
+        with:
+          message: "Awaiting manual approval for Dev deployment"
+      - name: Deploy to Dev
+        run: |
+          echo "Deploying firmware to Dev environment"
+          echo "Deployment complete"
+
+  deploy-prod:
+    needs: build
+    if: github.ref_name == 'prod'
+    runs-on: windows-latest
+    environment:
+      name: prod
+      url: https://prod-demo.example.com
+    steps:
+      - name: Await Manual Approval
+        uses: hmarr/auto-approve-action@v2
+        with:
+          message: "Awaiting manual approval for Prod deployment"
+      - name: Deploy to Prod
+        run: |
+          echo "Deploying firmware to Production environment"
+          echo "Deployment complete 
