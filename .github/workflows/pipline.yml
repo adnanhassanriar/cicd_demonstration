@@ -1,81 +1,37 @@
-name: CodeFusion CI/CD Demo
+name: Simple CI/CD Demo
 
 on:
   push:
     branches:
-      - staging
-      - dev
-      - prod
-  workflow_dispatch:  # manual trigger
+      - staging   # auto deploy when staging branch updates
+  workflow_dispatch: # manual trigger for dev and main
 
 jobs:
-  build:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        branch: [staging, dev, prod]
-
+  deploy:
+    runs-on: self-hosted   # Windows server runner
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Setup CodeFusion CLI
+      - name: Deploy to IIS (Simple Copy)
+        shell: pwsh
         run: |
-          echo "Assume CodeFusion CLI is installed on Windows Server"
-          cfsutil --version
+          $branch = "${{ github.ref_name }}"
+          
+          if ($branch -eq "staging") {
+            $dest = "C:\inetpub\wwwroot\simple-staging"
+          } elseif ($branch -eq "dev") {
+            $dest = "C:\inetpub\wwwroot\simple-dev"
+          } elseif ($branch -eq "main") {
+            $dest = "C:\inetpub\wwwroot\simple-prod"
+          } else {
+            Write-Host "Branch not configured for deployment."
+            exit 0
+          }
 
-      - name: Build CodeFusion Project
-        run: |
-          echo "Building project for branch ${{ github.ref_name }}"
-          cfsutil build --project MyProject.cfsproj --configuration Release
+          if (!(Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: firmware-${{ github.ref_name }}
-          path: build\Release\*
-  
-  deploy-staging:
-    needs: build
-    if: github.ref_name == 'staging'
-    runs-on: windows-latest
-    steps:
-      - name: Deploy to Staging
-        run: |
-          echo "Deploying firmware to Staging environment"
-          # simulate deployment
-          echo "Deployment complete "
+          Remove-Item -Recurse -Force "$dest\*" -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Force "${{ github.workspace }}\*" $dest
 
-  deploy-dev:
-    needs: build
-    if: github.ref_name == 'dev'
-    runs-on: windows-latest
-    environment:
-      name: dev
-      url: https://dev-demo.example.com
-    steps:
-      - name: Await Manual Approval
-        uses: hmarr/auto-approve-action@v2
-        with:
-          message: "Awaiting manual approval for Dev deployment"
-      - name: Deploy to Dev
-        run: |
-          echo "Deploying firmware to Dev environment"
-          echo "Deployment complete"
-
-  deploy-prod:
-    needs: build
-    if: github.ref_name == 'prod'
-    runs-on: windows-latest
-    environment:
-      name: prod
-      url: https://prod-demo.example.com
-    steps:
-      - name: Await Manual Approval
-        uses: hmarr/auto-approve-action@v2
-        with:
-          message: "Awaiting manual approval for Prod deployment"
-      - name: Deploy to Prod
-        run: |
-          echo "Deploying firmware to Production environment"
-          echo "Deployment complete 
+          Write-Host "✅ Deployed $branch branch to $dest"
